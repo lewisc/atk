@@ -47,7 +47,7 @@ class ExportHdfsJdbcPlugin extends SparkCommandPlugin[ExportHdfsJdbcArgs, UnitRe
   override def numberOfJobs(arguments: ExportHdfsJdbcArgs)(implicit invocation: Invocation) = 5
 
   /**
-   * Calculate covariance for the specified columns
+   * Export the frame to a jdbc table
    *
    * @param invocation information about the user and the circumstances at the time of the call, as well as a function
    *                   that can be called to produce a SparkContext that can be used during this invocation
@@ -56,8 +56,7 @@ class ExportHdfsJdbcPlugin extends SparkCommandPlugin[ExportHdfsJdbcArgs, UnitRe
    */
   override def execute(arguments: ExportHdfsJdbcArgs)(implicit invocation: Invocation): UnitReturn = {
 
-    val connectionArgs = JdbcFunctions.buildConnectionArgs(arguments.tableName, arguments.connectorType, arguments.driverName)
-    exportToHdfsJdbc(arguments, connectionArgs)
+    exportToHdfsJdbc(arguments)
 
   }
 
@@ -65,18 +64,15 @@ class ExportHdfsJdbcPlugin extends SparkCommandPlugin[ExportHdfsJdbcArgs, UnitRe
    * Exports to jdbc
    * @param arguments jdbc arguments
    */
-  private def exportToHdfsJdbc(arguments: ExportHdfsJdbcArgs,
-                               connectionArgs: Map[String, String])(implicit invocation: Invocation): UnitReturn = {
+  private def exportToHdfsJdbc(arguments: ExportHdfsJdbcArgs)(implicit invocation: Invocation): UnitReturn = {
+
     val frame: SparkFrame = arguments.frame
     val dataFrame = frame.rdd.toDataFrame
-    try {
-      dataFrame.createJDBCTable(connectionArgs(JdbcFunctions.urlKey), connectionArgs(JdbcFunctions.dbTableKey), false)
-    }
-    catch {
-      case e: SQLException =>
-        dataFrame.insertIntoJDBC(connectionArgs(JdbcFunctions.urlKey), connectionArgs(JdbcFunctions.dbTableKey), false)
-    }
 
+    // Set up the connection string
+    val dbConnectionString = arguments.getOrElse(JdbcFunctions.buildUrl(arguments.connectorType))
+
+    dataframe.write.jdbc(dbConnectionString, arguments.tableName)
   }
 
 }
